@@ -61,8 +61,10 @@ public class OracleServerSessionManager implements DBAServerSessionManager<Oracl
     @Override
     public Collection<OracleServerSession> getSessions(DBCSession session, Map<String, Object> options) throws DBException
     {
+        boolean atLeastV9 = dataSource.isAtLeastV9();
         try {
             StringBuilder sql = new StringBuilder();
+            if (atLeastV9) {
             sql.append(
                 "SELECT s.*, sq.SQL_FULLTEXT, io.* \n" +
                 "FROM GV$SESSION s \n" +
@@ -71,6 +73,18 @@ public class OracleServerSessionManager implements DBAServerSessionManager<Oracl
                 //"LEFT JOIN v$sesstat stat ON ( s.sid = stat.sid)\n" +
                 //"LEFT OUTER JOIN v$process e ON (s.paddr = e.addr)\n" +
                 "WHERE 1=1");
+            } else {
+                sql.append("SELECT\n" +
+                        "s.*,\n" +
+                        "sq.SQL_TEXT AS SQL_FULLTEXT,\n" +
+                        "io.*\n" +
+                        "FROM\n" +
+                        "\tGV$SESSION s, gv$sql sq, gv$sess_io io " +
+                        "WHERE s.sql_address = sq.address(+)\n" +
+                        "AND s.sql_hash_value = sq.hash_value(+)\n" +
+                        "AND s.sid = io.sid(+)\n" +
+                        "AND s.inst_id = io.inst_id(+)");
+            }
             if (!CommonUtils.getOption(options, OPTION_SHOW_BACKGROUND)) {
                 sql.append(" AND s.TYPE = 'USER'");
             }
